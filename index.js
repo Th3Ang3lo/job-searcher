@@ -13,6 +13,7 @@ const {
 const { fetchJobDetail, searchJobs } = require('./src/linkedin');
 const { analyzeJob } = require('./src/filter');
 const { evaluateJob, isLlmConfigured } = require('./src/llm');
+const { loadSystemPrompt } = require('./src/prompt');
 const { appendJobs, readExistingJobs } = require('./src/csv');
 const { loadResumeText } = require('./src/resume');
 const { canonicalJobUrl, formatSalary, sleep } = require('./src/util');
@@ -38,6 +39,7 @@ async function main() {
   }
 
   const config = loadConfig(options);
+  const systemPrompt = await loadSystemPrompt(config.systemPromptFile);
 
   let markdown;
   try {
@@ -115,6 +117,7 @@ async function main() {
     }`
   );
   if (config.dryRun) console.log('Modo simulação: o CSV não será alterado.');
+  console.log(`Prompt do sistema: ${config.systemPromptFile}`);
   console.log('');
 
   const found = new Map();
@@ -223,6 +226,7 @@ async function main() {
           job,
           profile,
           resumeText,
+          systemPrompt,
           llm: { ...config.llm, threshold: config.threshold },
         });
         llmFailures = 0;
@@ -283,10 +287,20 @@ async function main() {
     }
 
     const salary = formatSalary(job.salary || (verdict && verdict.salario) || '');
-    acceptedJobs.push({ company: job.company, title: job.title, salary, link });
+    const technologies =
+      verdict && verdict.tecnologias && verdict.tecnologias.length
+        ? verdict.tecnologias.join(', ')
+        : 'Não informado';
+    acceptedJobs.push({
+      company: job.company,
+      title: job.title,
+      salary,
+      technologies,
+      link,
+    });
     accepted++;
     console.log(`+ ${describe(job)} — aceita: ${reason}`);
-    console.log(`  ${link} | Salário: ${salary}`);
+    console.log(`  ${link} | Salário: ${salary} | Tecnologias: ${technologies}`);
   }
 
   console.log('');
@@ -299,6 +313,7 @@ async function main() {
         Empresa: job.company,
         Título_Vaga: job.title,
         Salário: job.salary,
+        Tecnologias_Pedidas: job.technologies,
         Link_da_vaga: job.link,
       }))
     );

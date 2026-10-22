@@ -9,6 +9,7 @@ const {
   buildUserPrompt,
   parseJson,
   normalizeVerdict,
+  normalizeTechnologies,
   evaluateJob,
 } = require('../src/llm');
 
@@ -31,8 +32,32 @@ test('normaliza o veredito do LLM', () => {
       { aderente: 'sim', nota: '82', motivo: 'bom encaixe', salario: 'R$ 12.000/mês' },
       70
     ),
-    { aderente: true, nota: 82, motivo: 'bom encaixe', salario: 'R$ 12.000/mês' }
+    {
+      aderente: true,
+      nota: 82,
+      motivo: 'bom encaixe',
+      salario: 'R$ 12.000/mês',
+      tecnologias: [],
+    }
   );
+});
+
+test('normaliza e deduplica as tecnologias pedidas', () => {
+  assert.deepEqual(
+    normalizeTechnologies(['Java', 'Spring Boot', 'java', '  Spring   Boot ', '', 'N/A']),
+    ['Java', 'Spring Boot']
+  );
+  assert.deepEqual(normalizeTechnologies('Java; Spring Boot; Java'), ['Java', 'Spring Boot']);
+  assert.deepEqual(normalizeTechnologies(undefined), []);
+  assert.equal(normalizeTechnologies(['x'.repeat(80)])[0].length, 60);
+});
+
+test('inclui as tecnologias no veredito', () => {
+  const verdict = normalizeVerdict(
+    { nota: 90, tecnologias: ['Java', 'Spring Boot', 'Java'] },
+    70
+  );
+  assert.deepEqual(verdict.tecnologias, ['Java', 'Spring Boot']);
 });
 
 test('usa a nota quando aderente não vem no JSON', () => {
@@ -61,7 +86,10 @@ test('prompt inclui nota mínima, perfil e descrição truncada', () => {
   );
   assert.match(prompt, /maior ou igual a 75/);
   assert.match(prompt, /Cargos desejados: Dev/);
-  assert.ok(prompt.length < 7000);
+  assert.match(prompt, /Java 17\+/);
+  assert.match(prompt, /Spring Boot/);
+  assert.match(prompt, /"tecnologias"/);
+  assert.ok(prompt.length < 8000);
 });
 
 test('prompt inclui o currículo somente quando fornecido', () => {
@@ -84,6 +112,23 @@ test('prompt inclui o currículo somente quando fornecido', () => {
 
   const withoutResume = buildUserPrompt(job, 'Cargos desejados: Dev', 70);
   assert.doesNotMatch(withoutResume, /CURRÍCULO DO CANDIDATO/);
+});
+
+test('evaluateJob exige o prompt do sistema', async () => {
+  await assert.rejects(
+    () =>
+      evaluateJob({
+        job: { title: 'Dev', company: 'Acme', description: 'Node.js' },
+        profile: 'Cargos desejados: Dev',
+        llm: {
+          apiKey: 'sk-test',
+          baseUrl: 'http://127.0.0.1:1/v1',
+          model: 'test-model',
+          threshold: 70,
+        },
+      }),
+    /Prompt do sistema não informado/
+  );
 });
 
 test('conversa com uma API compatível com OpenAI', async (t) => {
@@ -111,6 +156,7 @@ test('conversa com uma API compatível com OpenAI', async (t) => {
                   nota: 88,
                   motivo: 'bom encaixe',
                   salario: 'R$ 12.000/mês',
+                  tecnologias: ['Node.js', 'TypeScript'],
                 }),
               },
             },
@@ -134,6 +180,7 @@ test('conversa com uma API compatível com OpenAI', async (t) => {
     },
     profile: 'Cargos desejados: Dev',
     resumeText: 'Curriculo Teste - Node.js TypeScript',
+    systemPrompt: 'Você é um recrutador de teste.',
     llm: {
       apiKey: 'sk-test',
       baseUrl: `http://127.0.0.1:${port}/v1`,
@@ -146,9 +193,12 @@ test('conversa com uma API compatível com OpenAI', async (t) => {
   assert.equal(captured.authorization, 'Bearer sk-test');
   assert.equal(captured.body.model, 'test-model');
   assert.equal(captured.body.response_format.type, 'json_object');
+  assert.equal(captured.body.messages[0].role, 'system');
+  assert.equal(captured.body.messages[0].content, 'Você é um recrutador de teste.');
   assert.match(captured.body.messages[1].content, /CURRÍCULO DO CANDIDATO/);
   assert.match(captured.body.messages[1].content, /Curriculo Teste - Node\.js TypeScript/);
   assert.equal(verdict.aderente, true);
   assert.equal(verdict.nota, 88);
   assert.equal(verdict.salario, 'R$ 12.000/mês');
+  assert.deepEqual(verdict.tecnologias, ['Node.js', 'TypeScript']);
 });

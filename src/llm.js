@@ -1,13 +1,6 @@
 'use strict';
 
-const { truncate } = require('./util');
-
-const SYSTEM_PROMPT = [
-  'Você é um recrutador técnico sênior avaliando se uma vaga combina com o perfil de um candidato.',
-  'Use o perfil e o currículo fornecidos como fonte de verdade sobre o candidato.',
-  'Seja rigoroso, objetivo e consistente. Não invente informações.',
-  'Responda somente com o objeto JSON pedido, sem markdown e sem texto adicional.',
-].join(' ');
+const { normalizeText, truncate } = require('./util');
 
 function isLlmConfigured(llm) {
   const key = String(llm && llm.apiKey ? llm.apiKey : '').trim();
@@ -43,10 +36,22 @@ function buildUserPrompt(job, profile, threshold, resumeText = '') {
     'TAREFA:',
     'Avalie a aderência desta vaga ao perfil do candidato. Considere cargo, senioridade,',
     'tecnologias, localização/modalidade, tipo de contrato, idioma e faixa salarial.',
+    '',
+    'CRITÉRIOS TÉCNICOS:',
+    '- Trate versões específicas e frameworks do mesmo ecossistema como cobertos quando o',
+    '  candidato demonstra domínio da base. Exemplos: vaga pede "Java 17+" e o candidato tem',
+    '  Java → considere atendido; vaga pede "Spring Boot" e o candidato tem Java/Spring →',
+    '  considere aderente.',
+    '- Tecnologias relacionadas contam como proximidade, mas não invente experiência: se o',
+    '  candidato não tem nenhuma base relacionada, não considere atendido.',
+    '',
     `Considere "aderente" somente se a nota for maior ou igual a ${threshold}.`,
     'Não estime salário: use apenas um valor explícito na descrição. Se não houver, use null.',
+    'Liste em "tecnologias" as tecnologias e requisitos técnicos explicitamente pedidos pela',
+    'vaga (linguagens, versões, frameworks, bancos, cloud, ferramentas), sem duplicatas.',
+    'Se a vaga não pedir nenhuma tecnologia explícita, use uma lista vazia.',
     'Responda APENAS com JSON válido no formato:',
-    '{"aderente": true, "nota": 0, "motivo": "até 2 frases", "salario": "valor explícito ou null"}'
+    '{"aderente": true, "nota": 0, "motivo": "até 2 frases", "salario": "valor explícito ou null", "tecnologias": ["Java", "Spring Boot"]}'
   );
 
   return sections.join('\n');
@@ -73,6 +78,30 @@ function toBoolean(value) {
   if (typeof value === 'number') return value !== 0;
   if (typeof value === 'string') return /^(true|sim|yes|1)$/i.test(value.trim());
   return false;
+}
+
+function normalizeTechnologies(raw) {
+  const items = Array.isArray(raw)
+    ? raw
+    : typeof raw === 'string'
+      ? raw.split(/[;,]/)
+      : [];
+  const seen = new Set();
+  const result = [];
+
+  for (const item of items) {
+    const text = truncate(String(item ?? '').replace(/\s+/g, ' ').trim(), 60);
+    if (!text || /^(n\/a|nao informado|não informado|null|-)$/i.test(text)) continue;
+
+    const key = normalizeText(text);
+    if (!key || seen.has(key)) continue;
+
+    seen.add(key);
+    result.push(text);
+    if (result.length >= 20) break;
+  }
+
+  return result;
 }
 
 function normalizeVerdict(raw, threshold) {
@@ -103,6 +132,7 @@ function normalizeVerdict(raw, threshold) {
     nota: Math.max(0, Math.min(100, Math.round(nota))),
     motivo: truncate(raw.motivo || raw.reason || '', 300),
     salario,
+    tecnologias: normalizeTechnologies(raw.tecnologias ?? raw.technologies),
   };
 }
 
@@ -149,10 +179,15 @@ async function chatCompletion({ messages, llm, jsonMode = true, signal }) {
   return content;
 }
 
-async function evaluateJob({ job, profile, resumeText = '', llm, signal }) {
+async function evaluateJob({ job, profile, resumeText = '', llm, systemPrompt, signal }) {
   const threshold = Number.isFinite(llm.threshold) ? llm.threshold : 70;
+  const system = String(systemPrompt || '').trim();
+  if (!system) {
+    throw new Error('Prompt do sistema não informado');
+  }
+
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: system },
     { role: 'user', content: buildUserPrompt(job, profile, threshold, resumeText) },
   ];
 
@@ -182,4 +217,5 @@ module.exports = {
   buildUserPrompt,
   parseJson,
   normalizeVerdict,
+  normalizeTechnologies,
 };

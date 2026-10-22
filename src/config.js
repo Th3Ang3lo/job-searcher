@@ -13,6 +13,7 @@ Opções:
   --pages=N          Páginas de resultados por cargo (10 vagas por página)
   --limit=N          Máximo de vagas avaliadas a fundo nesta execução
   --interests=PATH   Arquivo de interesses (padrão: interests.md)
+  --system-prompt=PATH  Arquivo com o prompt do sistema (padrão: system-prompt.md)
   --csv=PATH         Arquivo CSV de saída (padrão: vagas.csv)
   --resume=PATH      Currículo em PDF ou diretório com PDFs (opcional)
   -h, --help         Mostra esta ajuda`;
@@ -33,6 +34,7 @@ function parseArgs(argv) {
     pages: null,
     limit: null,
     interests: null,
+    systemPrompt: null,
     csv: null,
     resume: null,
   };
@@ -47,6 +49,8 @@ function parseArgs(argv) {
       options.limit = parsePositiveInt(argument.slice('--limit='.length), '--limit');
     } else if (argument.startsWith('--interests=')) {
       options.interests = argument.slice('--interests='.length);
+    } else if (argument.startsWith('--system-prompt=')) {
+      options.systemPrompt = argument.slice('--system-prompt='.length);
     } else if (argument.startsWith('--csv=')) {
       options.csv = argument.slice('--csv='.length);
     } else if (argument.startsWith('--resume=')) {
@@ -82,6 +86,10 @@ function loadConfig(options) {
   return {
     root: ROOT,
     interestsFile: resolvePath(options.interests || process.env.INTERESTS_FILE, 'interests.md'),
+    systemPromptFile: resolvePath(
+      options.systemPrompt || process.env.SYSTEM_PROMPT_FILE,
+      'system-prompt.md'
+    ),
     csvFile: resolvePath(options.csv || process.env.OUTPUT_CSV, 'vagas.csv'),
     resumePath: resumeValue ? resolvePath(resumeValue, '') : '',
     resumeMaxChars: Math.max(1000, integer(process.env.RESUME_MAX_CHARS, 8000)),

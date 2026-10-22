@@ -4,12 +4,17 @@ Busca vagas públicas no LinkedIn, filtra as que combinam com o perfil descrito 
 [interests.md](interests.md) e grava os resultados em um CSV com as colunas:
 
 ```csv
-Empresa,Título_Vaga,Salário,Link_da_vaga
+Empresa,Título_Vaga,Salário,Tecnologias_Pedidas,Link_da_vaga
 ```
 
 O filtro é híbrido: palavras-chave descartam o óbvio e um LLM (compatível com a API
 OpenAI) lê a descrição e atribui uma nota de aderência. Sem chave de LLM, o sistema
 funciona apenas com as palavras-chave.
+
+O LLM trata versões específicas e frameworks do mesmo ecossistema como relacionados: se
+a vaga pede “Java 17+” e o perfil tem Java, ou pede “Spring Boot” e o perfil tem
+Java/Spring, isso conta como aderência. As tecnologias pedidas pela vaga também são
+extraídas para a coluna `Tecnologias_Pedidas`.
 
 ## Requisitos
 
@@ -44,6 +49,16 @@ filtro.
 - `## Empresas de interesse` / `## Empresas a evitar`.
 - `## Sobre mim` e `## Observações` — contexto livre enviado ao LLM.
 
+## Prompt do sistema (editável)
+
+O comportamento do LLM é definido em [system-prompt.md](system-prompt.md), não no código.
+Edite o arquivo livremente; o conteúdo inteiro (já sem espaços nas pontas) é enviado como
+mensagem de sistema a cada avaliação. O arquivo é lido no início de cada execução.
+
+Para usar outro arquivo, defina `SYSTEM_PROMPT_FILE` no `.env` ou passe
+`--system-prompt=PATH`. O arquivo não pode ficar vazio. Escreva apenas o prompt desejado,
+sem comentários ou cabeçalhos: tudo o que estiver no arquivo será enviado ao LLM.
+
 ## Currículo em PDF (opcional)
 
 Aponte `RESUME_PATH` para um arquivo PDF ou para um diretório com um ou mais PDFs:
@@ -68,7 +83,9 @@ npm start
 ```
 
 O CSV padrão é `vagas.csv`, na raiz do projeto. Nas próximas execuções, vagas já
-gravadas (mesmo link/ID) são ignoradas, então o arquivo só cresce com vagas novas.
+gravadas (mesmo link/ID) são ignoradas, então o arquivo só cresce com vagas novas. CSVs
+antigos com as quatro colunas originais são migrados automaticamente na próxima
+gravação; as linhas antigas recebem `Não informado` em `Tecnologias_Pedidas`.
 
 Opções:
 
@@ -78,13 +95,15 @@ npm start -- --keywords-only     # ignora o LLM nesta execução
 npm start -- --pages=2           # duas páginas de resultados por cargo
 npm start -- --limit=15          # avalia no máximo 15 vagas a fundo
 npm start -- --interests=outro.md --csv=resultados.csv
+npm start -- --system-prompt=meu-prompt.md
 npm start -- --resume=/caminho/do/curriculo.pdf
 npm start -- --help
 ```
 
 ## Como funciona
 
-1. Lê o `interests.md` e, se `RESUME_PATH` estiver configurado, extrai o texto dos PDFs.
+1. Lê o prompt do sistema, o `interests.md` e, se `RESUME_PATH` estiver configurado,
+   extrai o texto dos PDFs.
 2. Monta uma busca por cargo no endpoint público de vagas do LinkedIn.
 3. Aplica os filtros de modalidade e período (`SEARCH_DAYS_BACK`).
 4. Remove vagas que já estão no CSV.
@@ -92,9 +111,12 @@ npm start -- --help
 6. Descarta empresas/palavras-chave excluídas e vagas abaixo do salário mínimo.
 7. No modo híbrido, exige algum sinal positivo (cargo, skills, keywords ou empresa) e
    então pede ao LLM uma nota de 0 a 100 com justificativa, considerando o perfil e o
-   currículo.
-8. Grava as aprovadas no CSV, extraindo o salário da página (ou do texto da vaga via LLM).
-   Quando não há valor explícito, grava `Não informado`.
+   currículo. O prompt orienta a considerar versões e frameworks do mesmo ecossistema
+   como relacionados.
+8. Grava as aprovadas no CSV, extraindo o salário da página (ou do texto da vaga via LLM)
+   e as tecnologias pedidas pela vaga. Quando não há valor explícito, grava
+   `Não informado`. No modo `keywords`, `Tecnologias_Pedidas` fica como
+   `Não informado`, pois a extração é feita pelo LLM.
 
 ## Configuração (.env)
 
@@ -103,6 +125,7 @@ npm start -- --help
 | `LLM_API_KEY` | — | Chave da API no formato OpenAI. |
 | `LLM_BASE_URL` | `https://api.deepseek.com/v1` | Endpoint compatível com `/chat/completions`. |
 | `LLM_MODEL` | `deepseek-v4-flash` | Modelo usado no filtro. |
+| `SYSTEM_PROMPT_FILE` | `system-prompt.md` | Arquivo com o prompt do sistema. |
 | `RESUME_PATH` | — | Arquivo PDF ou diretório com currículos (opcional). |
 | `RESUME_MAX_CHARS` | `8000` | Limite de caracteres do currículo no prompt. |
 | `FILTER_MODE` | `hybrid` | `hybrid`, `keywords` ou `llm`. |
@@ -132,9 +155,10 @@ Exemplo de cron diário às 9h:
   os parsers em [src/linkedin.js](src/linkedin.js) precisam de ajuste.
 - Salários só aparecem quando a empresa os publica; muitas vagas ficarão como
   `Não informado`.
-- O filtro por LLM envia título, empresa, local, salário, descrição e o texto do
-  currículo para o provedor configurado. Não use o recurso se não quiser compartilhar
-  esses dados; não coloque informações sensíveis no `interests.md`.
+- O filtro por LLM envia título, empresa, local, salário, descrição, o texto do
+  currículo e o conteúdo do `system-prompt.md` para o provedor configurado. Não use o
+  recurso se não quiser compartilhar esses dados; não coloque informações sensíveis no
+  `interests.md` nem no prompt do sistema.
 
 ## Testes
 
@@ -143,5 +167,5 @@ npm test
 ```
 
 Os testes cobrem o parser do `interests.md`, os parsers de HTML do LinkedIn, o filtro
-por regras, a extração de currículo em PDF e a leitura/escrita/deduplicação do CSV.
-Nenhum teste acessa a rede.
+por regras, o carregamento do prompt do sistema, a extração de currículo em PDF e a
+leitura/escrita/deduplicação do CSV. Nenhum teste acessa a rede.

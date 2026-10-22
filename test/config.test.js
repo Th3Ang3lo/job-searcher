@@ -30,6 +30,7 @@ test('parseArgs lê --resume e as demais opções', () => {
       '--pages=2',
       '--limit=5',
       '--interests=perfil.md',
+      '--system-prompt=prompt.md',
       '--csv=saida.csv',
       '--resume=/tmp/curriculo.pdf',
     ]),
@@ -40,6 +41,7 @@ test('parseArgs lê --resume e as demais opções', () => {
       pages: 2,
       limit: 5,
       interests: 'perfil.md',
+      systemPrompt: 'prompt.md',
       csv: 'saida.csv',
       resume: '/tmp/curriculo.pdf',
     }
@@ -50,8 +52,24 @@ test('parseArgs rejeita argumentos desconhecidos', () => {
   assert.throws(() => parseArgs(['--foo']), /Argumento desconhecido/);
 });
 
-test('a ajuda menciona --resume', () => {
+test('a ajuda menciona --resume e --system-prompt', () => {
   assert.match(HELP, /--resume=PATH/);
+  assert.match(HELP, /--system-prompt=PATH/);
+});
+
+test('loadConfig usa o prompt do sistema padrão ou o caminho informado', (t) => {
+  setEnv(t, { SYSTEM_PROMPT_FILE: '' });
+  assert.equal(loadConfig({}).systemPromptFile, path.join(ROOT, 'system-prompt.md'));
+  assert.equal(
+    loadConfig({ systemPrompt: 'prompts/meu.md' }).systemPromptFile,
+    path.join(ROOT, 'prompts', 'meu.md')
+  );
+
+  process.env.SYSTEM_PROMPT_FILE = '/tmp/prompt-do-ambiente.md';
+  assert.equal(
+    loadConfig({}).systemPromptFile,
+    '/tmp/prompt-do-ambiente.md'
+  );
 });
 
 test('loadConfig resolve um currículo relativo à raiz do projeto', (t) => {

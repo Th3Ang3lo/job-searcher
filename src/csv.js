@@ -4,7 +4,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { canonicalJobUrl, extractJobId, normalizeText } = require('./util');
 
-const HEADER = ['Empresa', 'Título_Vaga', 'Salário', 'Link_da_vaga'];
+const HEADER = ['Empresa', 'Título_Vaga', 'Salário', 'Tecnologias_Pedidas', 'Link_da_vaga'];
+const LEGACY_HEADER = ['Empresa', 'Título_Vaga', 'Salário', 'Link_da_vaga'];
 
 function csvEscape(value) {
   const text = value == null ? '' : String(value);
@@ -74,11 +75,15 @@ async function readExistingJobs(file) {
   const header = parsed[0].map((value) => value.trim());
   const normalized = header.map(normalizeText);
   const expected = HEADER.map(normalizeText);
-  const matches =
+  const legacyExpected = LEGACY_HEADER.map(normalizeText);
+  const matchesCurrent =
     header.length === HEADER.length &&
     expected.every((value, index) => normalized[index] === value);
+  const matchesLegacy =
+    header.length === LEGACY_HEADER.length &&
+    legacyExpected.every((value, index) => normalized[index] === value);
 
-  if (!matches) {
+  if (!matchesCurrent && !matchesLegacy) {
     throw new Error(
       `O CSV ${file} não tem o cabeçalho esperado (${HEADER.join(', ')}). ` +
         'Faça backup e renomeie/remova o arquivo para recomeçar.'
@@ -94,7 +99,7 @@ async function readExistingJobs(file) {
     if (id) ids.add(id);
   }
 
-  return { rows, ids, count: rows.length };
+  return { rows, ids, count: rows.length, legacy: matchesLegacy };
 }
 
 async function appendJobs(file, jobs) {
@@ -107,16 +112,26 @@ async function appendJobs(file, jobs) {
     const id = extractJobId(link);
     if (!id || ids.has(id)) continue;
     ids.add(id);
-    newRows.push([job.company, job.title, job.salary, link]);
+    newRows.push([
+      job.company,
+      job.title,
+      job.salary,
+      job.technologies || 'Não informado',
+      link,
+    ]);
   }
 
   if (!newRows.length) return 0;
 
-  const lines = [
-    HEADER,
-    ...existing.rows.map((row) => row.slice(0, HEADER.length)),
-    ...newRows,
-  ].map((row) => row.map(csvEscape).join(','));
+  const existingRows = existing.rows.map((row) => {
+    if (!existing.legacy) return row.slice(0, HEADER.length);
+    const [company = '', title = '', salary = '', link = ''] = row;
+    return [company, title, salary, 'Não informado', link];
+  });
+
+  const lines = [HEADER, ...existingRows, ...newRows].map((row) =>
+    row.map(csvEscape).join(',')
+  );
 
   const content = `﻿${lines.join('\n')}\n`;
   await fs.mkdir(path.dirname(file), { recursive: true });
@@ -129,6 +144,7 @@ async function appendJobs(file, jobs) {
 
 module.exports = {
   HEADER,
+  LEGACY_HEADER,
   csvEscape,
   parseCsv,
   readExistingJobs,
