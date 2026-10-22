@@ -14,7 +14,10 @@ funciona apenas com as palavras-chave.
 O LLM trata versões específicas e frameworks do mesmo ecossistema como relacionados: se
 a vaga pede “Java 17+” e o perfil tem Java, ou pede “Spring Boot” e o perfil tem
 Java/Spring, isso conta como aderência. As tecnologias pedidas pela vaga também são
-extraídas para a coluna `Tecnologias_Pedidas`.
+extraídas para a coluna `Tecnologias_Pedidas`, por uma lista de linguagens, frameworks,
+bancos, clouds e ferramentas que lê o título e a descrição do anúncio. A extração
+funciona em qualquer modo de filtro e é complementada pelo campo `tecnologias` do LLM
+quando ele está disponível.
 
 ## Requisitos
 
@@ -87,7 +90,7 @@ imediatamente, então uma interrupção no meio da execução não perde o que j
 aprovado. Nas próximas execuções, vagas já gravadas (mesmo link/ID) são ignoradas, então
 o arquivo só cresce com vagas novas. CSVs antigos com as quatro colunas originais são
 migrados automaticamente na próxima gravação; as linhas antigas recebem `Não informado`
-em `Tecnologias_Pedidas`.
+em `Tecnologias_Pedidas` e podem ser preenchidas com o backfill descrito abaixo.
 
 Opções:
 
@@ -119,6 +122,33 @@ e assim por diante — sem repetir as mesmas vagas a cada rodada.
 - `--dry-run` não altera o cursor, então simulações repetidas mostram as mesmas páginas.
 - O progresso é local e não é versionado no git.
 
+## Tecnologias pedidas e backfill
+
+A coluna `Tecnologias_Pedidas` não depende do LLM: o sistema procura no título e na
+descrição da vaga nomes conhecidos de linguagens, frameworks, bancos, clouds e
+ferramentas (Java, .NET, Spring Boot, Node.js, PostgreSQL, AWS, Docker etc.). Versões
+são normalizadas — “Java 17” vira `Java` e “.NET 8” vira `.NET` — e nomes repetidos são
+removidos. Quando o LLM está ativo, o que ele devolve em `tecnologias` complementa a
+lista com itens que não estão no catálogo. Se nada for encontrado, a célula recebe
+`Não informado`.
+
+O catálogo fica em [src/technologies.js](src/technologies.js). Para reconhecer uma
+tecnologia nova, acrescente uma entrada com o nome canônico e as expressões regulares
+que a identificam. Os testes ficam em [test/technologies.test.js](test/technologies.test.js).
+
+Para preencher as linhas antigas do CSV que ainda estão como `Não informado`, use o
+backfill. Ele abre cada vaga no LinkedIn, lê a descrição, extrai as tecnologias e salva
+o CSV após cada linha atualizada:
+
+```bash
+npm run backfill-tech -- --dry-run --limit=20   # simula em 20 linhas, sem gravar
+npm run backfill-tech                          # preenche todas as linhas pendentes
+```
+
+O backfill ignora linhas que já têm tecnologias e vagas sem link válido. Se o LinkedIn
+limitar as requisições, ele para após cinco falhas seguidas; o que já foi atualizado
+fica salvo. Use `--delay=MS` para aumentar o intervalo e `--csv=PATH` para outro arquivo.
+
 ## Como funciona
 
 1. Lê o prompt do sistema, o `interests.md` e, se `RESUME_PATH` estiver configurado,
@@ -134,9 +164,10 @@ e assim por diante — sem repetir as mesmas vagas a cada rodada.
    currículo. O prompt orienta a considerar versões e frameworks do mesmo ecossistema
    como relacionados.
 8. Grava cada vaga aprovada imediatamente no CSV, extraindo o salário da página (ou do
-   texto da vaga via LLM) e as tecnologias pedidas pela vaga. Quando não há valor
-   explícito, grava `Não informado`. No modo `keywords`, `Tecnologias_Pedidas` fica como
-   `Não informado`, pois a extração é feita pelo LLM.
+   texto da vaga via LLM) e as tecnologias pedidas pela vaga. A coluna
+   `Tecnologias_Pedidas` é montada a partir do título/descrição em qualquer modo de
+   filtro e recebe os itens extras que o LLM devolver. Quando não há valor explícito,
+   grava `Não informado`.
 
 ## Configuração (.env)
 
@@ -192,5 +223,5 @@ npm test
 
 Os testes cobrem o parser do `interests.md`, os parsers de HTML do LinkedIn, a paginação
 e o cursor entre execuções, o filtro por regras, o carregamento do prompt do sistema, a
-extração de currículo em PDF e a leitura/escrita/deduplicação do CSV. Nenhum teste acessa
-a rede.
+extração de currículo em PDF, a extração determinística de tecnologias, o backfill do
+CSV e a leitura/escrita/deduplicação do CSV. Nenhum teste acessa a rede.

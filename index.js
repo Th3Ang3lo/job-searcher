@@ -17,6 +17,7 @@ const { loadSystemPrompt } = require('./src/prompt');
 const { appendJobs, readExistingJobs } = require('./src/csv');
 const { getNextPage, loadState, saveState, setNextPage } = require('./src/state');
 const { loadResumeText } = require('./src/resume');
+const { technologiesForJob } = require('./src/technologies');
 const { canonicalJobUrl, formatSalary, sleep } = require('./src/util');
 
 function describe(job) {
@@ -328,10 +329,7 @@ async function main() {
     }
 
     const salary = formatSalary(job.salary || (verdict && verdict.salario) || '');
-    const technologies =
-      verdict && verdict.tecnologias && verdict.tecnologias.length
-        ? verdict.tecnologias.join(', ')
-        : 'Não informado';
+    const technologies = technologiesForJob(job, verdict);
     const acceptedJob = {
       company: job.company,
       title: job.title,

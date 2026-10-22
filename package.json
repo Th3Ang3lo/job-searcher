@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dry": "node index.js --dry-run",
+    "backfill-tech": "node scripts/backfill-technologies.js",
     "test": "node --test"
   },
   "engines": {

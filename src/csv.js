@@ -102,6 +102,18 @@ async function readExistingJobs(file) {
   return { rows, ids, count: rows.length, legacy: matchesLegacy };
 }
 
+async function writeCsv(file, rows) {
+  const lines = [HEADER, ...rows.map((row) => row.slice(0, HEADER.length))].map((row) =>
+    row.map(csvEscape).join(',')
+  );
+
+  const content = `﻿${lines.join('\n')}\n`;
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(temporary, content, 'utf8');
+  await fs.rename(temporary, file);
+}
+
 async function appendJobs(file, jobs) {
   const existing = await readExistingJobs(file);
   const ids = new Set(existing.ids);
@@ -129,16 +141,7 @@ async function appendJobs(file, jobs) {
     return [company, title, salary, 'Não informado', link];
   });
 
-  const lines = [HEADER, ...existingRows, ...newRows].map((row) =>
-    row.map(csvEscape).join(',')
-  );
-
-  const content = `﻿${lines.join('\n')}\n`;
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  const temporary = `${file}.${process.pid}.tmp`;
-  await fs.writeFile(temporary, content, 'utf8');
-  await fs.rename(temporary, file);
-
+  await writeCsv(file, [...existingRows, ...newRows]);
   return newRows.length;
 }
 
@@ -148,5 +151,6 @@ module.exports = {
   csvEscape,
   parseCsv,
   readExistingJobs,
+  writeCsv,
   appendJobs,
 };

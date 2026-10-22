@@ -60,6 +60,27 @@ test('inclui as tecnologias no veredito', () => {
   assert.deepEqual(verdict.tecnologias, ['Java', 'Spring Boot']);
 });
 
+test('aceita aliases e objetos no campo de tecnologias', () => {
+  assert.deepEqual(
+    normalizeVerdict(
+      {
+        nota: 90,
+        tech_stack: [{ name: 'Java' }, { nome: 'Spring Boot' }, 'Java', 'N/A'],
+      },
+      70
+    ).tecnologias,
+    ['Java', 'Spring Boot']
+  );
+  assert.deepEqual(
+    normalizeVerdict({ nota: 80, tecnologias_pedidas: 'C#, .NET' }, 70).tecnologias,
+    ['C#', '.NET']
+  );
+  assert.deepEqual(
+    normalizeVerdict({ nota: 80, requisitos_tecnicos: ['AWS', 'Docker'] }, 70).tecnologias,
+    ['AWS', 'Docker']
+  );
+});
+
 test('usa a nota quando aderente não vem no JSON', () => {
   assert.equal(normalizeVerdict({ nota: 65 }, 70).aderente, false);
   assert.equal(normalizeVerdict({ nota: 75 }, 70).aderente, true);

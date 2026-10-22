@@ -10,6 +10,7 @@ const {
   parseCsv,
   csvEscape,
   readExistingJobs,
+  writeCsv,
   appendJobs,
   HEADER,
   LEGACY_HEADER,
@@ -82,6 +83,34 @@ test('grava, deduplica e relê o CSV', async (t) => {
 
   const betaRow = existing.rows.find((row) => row[4].includes('7654321'));
   assert.equal(betaRow[3], 'Java, Spring Boot');
+});
+
+test('writeCsv regrava as linhas mantendo o cabeçalho e o escape', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'job-searcher-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'vagas.csv');
+
+  await writeCsv(file, [
+    [
+      'Acme, Inc',
+      'Dev "Backend"',
+      'R$ 10.000',
+      'Java, Spring Boot',
+      'https://www.linkedin.com/jobs/view/1234567',
+    ],
+    ['Beta', 'Engenheiro', 'Não informado', '', 'https://www.linkedin.com/jobs/view/7654321'],
+  ]);
+
+  const content = await fs.readFile(file, 'utf8');
+  assert.ok(content.startsWith(`﻿${HEADER.join(',')}`));
+  assert.ok(content.includes('"Acme, Inc"'));
+  assert.ok(content.includes('"Dev ""Backend"""'));
+  assert.ok(content.includes('"Java, Spring Boot"'));
+
+  const existing = await readExistingJobs(file);
+  assert.equal(existing.count, 2);
+  assert.equal(existing.rows[0][3], 'Java, Spring Boot');
+  assert.equal(existing.rows[1][3], '');
 });
 
 test('migra um CSV antigo para o novo cabeçalho ao gravar', async (t) => {

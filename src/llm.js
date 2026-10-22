@@ -80,6 +80,13 @@ function toBoolean(value) {
   return false;
 }
 
+function technologyItem(item) {
+  if (item && typeof item === 'object') {
+    return item.nome ?? item.name ?? item.tecnologia ?? item.technology ?? item.label ?? '';
+  }
+  return item;
+}
+
 function normalizeTechnologies(raw) {
   const items = Array.isArray(raw)
     ? raw
@@ -90,7 +97,10 @@ function normalizeTechnologies(raw) {
   const result = [];
 
   for (const item of items) {
-    const text = truncate(String(item ?? '').replace(/\s+/g, ' ').trim(), 60);
+    const text = truncate(
+      String(technologyItem(item) ?? '').replace(/\s+/g, ' ').trim(),
+      60
+    );
     if (!text || /^(n\/a|nao informado|não informado|null|-)$/i.test(text)) continue;
 
     const key = normalizeText(text);
@@ -132,7 +142,15 @@ function normalizeVerdict(raw, threshold) {
     nota: Math.max(0, Math.min(100, Math.round(nota))),
     motivo: truncate(raw.motivo || raw.reason || '', 300),
     salario,
-    tecnologias: normalizeTechnologies(raw.tecnologias ?? raw.technologies),
+    tecnologias: normalizeTechnologies(
+      raw.tecnologias ??
+        raw.technologies ??
+        raw.tecnologias_pedidas ??
+        raw.tech_stack ??
+        raw.stack ??
+        raw.requisitos_tecnicos ??
+        raw.technical_requirements
+    ),
   };
 }
 
