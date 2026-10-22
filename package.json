@@ -1,0 +1,22 @@
+{
+  "name": "job-searcher",
+  "version": "1.0.0",
+  "description": "Busca vagas no LinkedIn alinhadas ao interests.md e grava os resultados em CSV",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dry": "node index.js --dry-run",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "jobs",
+    "linkedin",
+    "csv"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
