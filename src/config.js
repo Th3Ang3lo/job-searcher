@@ -93,7 +93,7 @@ function loadConfig(options) {
     llm: {
       apiKey: String(process.env.LLM_API_KEY || '').trim(),
       baseUrl: String(process.env.LLM_BASE_URL || 'https://api.deepseek.com/v1').trim(),
-      model: String(process.env.LLM_MODEL || 'deepseek-chat').trim(),
+      model: String(process.env.LLM_MODEL || 'deepseek-v4-flash').trim(),
     },
   };
 }
