@@ -82,10 +82,12 @@ currículo.
 npm start
 ```
 
-O CSV padrão é `vagas.csv`, na raiz do projeto. Nas próximas execuções, vagas já
-gravadas (mesmo link/ID) são ignoradas, então o arquivo só cresce com vagas novas. CSVs
-antigos com as quatro colunas originais são migrados automaticamente na próxima
-gravação; as linhas antigas recebem `Não informado` em `Tecnologias_Pedidas`.
+O CSV padrão é `vagas.csv`, na raiz do projeto. Cada vaga aceita é gravada
+imediatamente, então uma interrupção no meio da execução não perde o que já foi
+aprovado. Nas próximas execuções, vagas já gravadas (mesmo link/ID) são ignoradas, então
+o arquivo só cresce com vagas novas. CSVs antigos com as quatro colunas originais são
+migrados automaticamente na próxima gravação; as linhas antigas recebem `Não informado`
+em `Tecnologias_Pedidas`.
 
 Opções:
 
@@ -131,9 +133,9 @@ e assim por diante — sem repetir as mesmas vagas a cada rodada.
    então pede ao LLM uma nota de 0 a 100 com justificativa, considerando o perfil e o
    currículo. O prompt orienta a considerar versões e frameworks do mesmo ecossistema
    como relacionados.
-8. Grava as aprovadas no CSV, extraindo o salário da página (ou do texto da vaga via LLM)
-   e as tecnologias pedidas pela vaga. Quando não há valor explícito, grava
-   `Não informado`. No modo `keywords`, `Tecnologias_Pedidas` fica como
+8. Grava cada vaga aprovada imediatamente no CSV, extraindo o salário da página (ou do
+   texto da vaga via LLM) e as tecnologias pedidas pela vaga. Quando não há valor
+   explícito, grava `Não informado`. No modo `keywords`, `Tecnologias_Pedidas` fica como
    `Não informado`, pois a extração é feita pelo LLM.
 
 ## Configuração (.env)

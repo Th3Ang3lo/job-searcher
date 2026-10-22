@@ -216,6 +216,8 @@ async function main() {
 
   let evaluated = 0;
   let accepted = 0;
+  let saved = 0;
+  let saveFailures = 0;
   let rejected = 0;
   let detailFailures = 0;
   let llmFailures = 0;
@@ -330,16 +332,32 @@ async function main() {
       verdict && verdict.tecnologias && verdict.tecnologias.length
         ? verdict.tecnologias.join(', ')
         : 'Não informado';
-    acceptedJobs.push({
+    const acceptedJob = {
       company: job.company,
       title: job.title,
       salary,
       technologies,
       link,
-    });
+    };
+    acceptedJobs.push(acceptedJob);
     accepted++;
     console.log(`+ ${describe(job)} — aceita: ${reason}`);
     console.log(`  ${link} | Salário: ${salary} | Tecnologias: ${technologies}`);
+
+    if (!config.dryRun) {
+      try {
+        const added = await appendJobs(config.csvFile, [acceptedJob]);
+        saved += added;
+        console.log(
+          added
+            ? `  Gravada em ${config.csvFile}.`
+            : `  Já existia em ${config.csvFile}; não duplicada.`
+        );
+      } catch (error) {
+        saveFailures++;
+        console.warn(`! Falha ao gravar em ${config.csvFile}: ${error.message}`);
+      }
+    }
   }
 
   console.log('');
@@ -357,13 +375,16 @@ async function main() {
       }))
     );
   } else {
-    const added = await appendJobs(config.csvFile, acceptedJobs);
-    console.log(`${added} vaga(s) gravada(s) em ${config.csvFile}.`);
+    console.log(`${saved} vaga(s) gravada(s) em ${config.csvFile}.`);
+    if (saveFailures) {
+      console.warn(`AVISO: ${saveFailures} vaga(s) aceita(s) não puderam ser gravadas.`);
+    }
   }
 
   console.log(
-    `Resumo: ${found.size} encontrada(s), ${candidates.length} nova(s), ${accepted} aceita(s), ` +
-      `${rejected} descartada(s), ${detailFailures} falha(s) ao abrir vaga(s).`
+    `Resumo: ${found.size} encontrada(s), ${candidates.length} nova(s), ${accepted} aceita(s)` +
+      `${config.dryRun ? '' : `, ${saved} gravada(s)`}, ${rejected} descartada(s), ` +
+      `${detailFailures} falha(s) ao abrir vaga(s).`
   );
 }
 
