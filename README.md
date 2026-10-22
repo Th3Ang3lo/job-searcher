@@ -92,20 +92,38 @@ Opções:
 ```bash
 npm run dry -- --limit=10        # simula, mostra a tabela e não grava
 npm start -- --keywords-only     # ignora o LLM nesta execução
-npm start -- --pages=2           # duas páginas de resultados por cargo
+npm start -- --pages=2           # duas páginas novas por cargo nesta execução
+npm start -- --reset-pages       # volta todas as buscas para a página 1
 npm start -- --limit=15          # avalia no máximo 15 vagas a fundo
 npm start -- --interests=outro.md --csv=resultados.csv
 npm start -- --system-prompt=meu-prompt.md
+npm start -- --state=progresso.json
 npm start -- --resume=/caminho/do/curriculo.pdf
 npm start -- --help
 ```
+
+## Paginação entre execuções
+
+O LinkedIn devolve 10 vagas por página. O sistema guarda, para cada combinação de cargo,
+local, modalidade e janela de dias, a próxima página a buscar em
+`.job-searcher-state.json` (`SEARCH_STATE_FILE`). Assim, com o padrão
+`PAGES_PER_QUERY=1`, a primeira execução lê a página 1, a seguinte continua na página 2,
+e assim por diante — sem repetir as mesmas vagas a cada rodada.
+
+- `--pages=N` define quantas páginas novas cada execução consome por cargo.
+- Ao chegar ao fim dos resultados (página com menos de 10 vagas), o cursor volta para a
+  página 1 na execução seguinte, para capturar vagas novas.
+- `--reset-pages` (ou apagar `.job-searcher-state.json`) recomeça tudo da página 1.
+- `--dry-run` não altera o cursor, então simulações repetidas mostram as mesmas páginas.
+- O progresso é local e não é versionado no git.
 
 ## Como funciona
 
 1. Lê o prompt do sistema, o `interests.md` e, se `RESUME_PATH` estiver configurado,
    extrai o texto dos PDFs.
 2. Monta uma busca por cargo no endpoint público de vagas do LinkedIn.
-3. Aplica os filtros de modalidade e período (`SEARCH_DAYS_BACK`).
+3. Aplica os filtros de modalidade e período (`SEARCH_DAYS_BACK`) e começa da página
+   salva para aquela busca.
 4. Remove vagas que já estão no CSV.
 5. Abre cada vaga nova para obter descrição e faixa salarial.
 6. Descarta empresas/palavras-chave excluídas e vagas abaixo do salário mínimo.
@@ -131,12 +149,13 @@ npm start -- --help
 | `FILTER_MODE` | `hybrid` | `hybrid`, `keywords` ou `llm`. |
 | `MATCH_THRESHOLD` | `70` | Nota mínima para aceitar a vaga. |
 | `SEARCH_DAYS_BACK` | `7` | Janela de recência da busca. |
-| `PAGES_PER_QUERY` | `1` | Páginas por cargo (10 vagas por página). |
+| `PAGES_PER_QUERY` | `1` | Páginas novas por cargo em cada execução. |
 | `MAX_JOBS_PER_QUERY` | `0` | Limite de vagas por cargo; `0` = todas as páginas configuradas. |
 | `MAX_JOBS_TOTAL` | `0` | Limite de vagas avaliadas a fundo; `0` = sem limite. |
 | `REQUEST_DELAY_MS` | `1500` | Intervalo entre requisições ao LinkedIn. |
 | `INTERESTS_FILE` | `interests.md` | Arquivo de perfil. |
 | `OUTPUT_CSV` | `vagas.csv` | Arquivo de saída. |
+| `SEARCH_STATE_FILE` | `.job-searcher-state.json` | Progresso da paginação entre execuções. |
 
 ## Agendamento
 
@@ -155,6 +174,9 @@ Exemplo de cron diário às 9h:
   os parsers em [src/linkedin.js](src/linkedin.js) precisam de ajuste.
 - Salários só aparecem quando a empresa os publica; muitas vagas ficarão como
   `Não informado`.
+- A paginação depende da ordenação do LinkedIn: vagas novas podem deslocar resultados
+  entre execuções, causando pequenas repetições ou saltos. Vagas já aceitas no CSV são
+  sempre ignoradas por ID.
 - O filtro por LLM envia título, empresa, local, salário, descrição, o texto do
   currículo e o conteúdo do `system-prompt.md` para o provedor configurado. Não use o
   recurso se não quiser compartilhar esses dados; não coloque informações sensíveis no
@@ -166,6 +188,7 @@ Exemplo de cron diário às 9h:
 npm test
 ```
 
-Os testes cobrem o parser do `interests.md`, os parsers de HTML do LinkedIn, o filtro
-por regras, o carregamento do prompt do sistema, a extração de currículo em PDF e a
-leitura/escrita/deduplicação do CSV. Nenhum teste acessa a rede.
+Os testes cobrem o parser do `interests.md`, os parsers de HTML do LinkedIn, a paginação
+e o cursor entre execuções, o filtro por regras, o carregamento do prompt do sistema, a
+extração de currículo em PDF e a leitura/escrita/deduplicação do CSV. Nenhum teste acessa
+a rede.

@@ -13,6 +13,7 @@ const BASE_URL = 'https://www.linkedin.com';
 const SEARCH_URL = `${BASE_URL}/jobs-guest/jobs/api/seeMoreJobPostings/search`;
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const PAGE_SIZE = 10;
 
 function requestHeaders() {
   return {
@@ -149,33 +150,44 @@ function recencyParam(daysBack) {
   return null;
 }
 
+function buildSearchUrl({ role, location, workModeCodes = [], daysBack = 7, page = 0 }) {
+  const params = new URLSearchParams();
+  params.set('keywords', role);
+  params.set('location', location);
+  if (workModeCodes.length) params.set('f_WT', workModeCodes.join(','));
+  const recency = recencyParam(daysBack);
+  if (recency) params.set('f_TPR', recency);
+  params.set('start', String(Math.max(0, page) * PAGE_SIZE));
+  return `${SEARCH_URL}?${params.toString()}`;
+}
+
 async function searchJobs({
   role,
   location,
   workModeCodes = [],
   daysBack = 7,
   pages = 1,
+  startPage = 0,
   maxJobs = 0,
   delayMs = 1500,
+  fetcher = fetchHtml,
+  sleepFn = sleep,
 }) {
   const jobs = [];
   const seen = new Set();
+  const firstPage = Math.max(0, startPage);
+  let pagesFetched = 0;
+  let reachedEnd = false;
 
-  for (let page = 0; page < pages; page++) {
-    if (page > 0) await sleep(delayMs + Math.floor(Math.random() * 400));
+  for (let offset = 0; offset < pages; offset++) {
+    const page = firstPage + offset;
+    if (offset > 0) await sleepFn(delayMs + Math.floor(Math.random() * 400));
 
-    const params = new URLSearchParams();
-    params.set('keywords', role);
-    params.set('location', location);
-    if (workModeCodes.length) params.set('f_WT', workModeCodes.join(','));
-    const recency = recencyParam(daysBack);
-    if (recency) params.set('f_TPR', recency);
-    params.set('start', String(page * 10));
-
-    const html = await fetchHtml(`${SEARCH_URL}?${params.toString()}`, {
+    const html = await fetcher(buildSearchUrl({ role, location, workModeCodes, daysBack, page }), {
       label: `busca "${role}" (página ${page + 1})`,
     });
     const pageJobs = parseSearchResults(html);
+    pagesFetched++;
 
     for (const job of pageJobs) {
       if (seen.has(job.id)) continue;
@@ -183,11 +195,27 @@ async function searchJobs({
       jobs.push(job);
     }
 
+    if (pageJobs.length < PAGE_SIZE) {
+      reachedEnd = true;
+      break;
+    }
     if (maxJobs > 0 && jobs.length >= maxJobs) break;
-    if (pageJobs.length < 10) break;
   }
 
-  return maxJobs > 0 ? jobs.slice(0, maxJobs) : jobs;
+  let nextPage = firstPage + pagesFetched;
+  if (reachedEnd) {
+    nextPage = 0;
+  } else if (maxJobs > 0 && jobs.length > maxJobs) {
+    // A página foi parcialmente descartada pelo limite; reavalie-a na próxima execução.
+    nextPage = Math.max(firstPage, nextPage - 1);
+  }
+
+  return {
+    jobs: maxJobs > 0 ? jobs.slice(0, maxJobs) : jobs,
+    reachedEnd,
+    nextPage,
+    pagesFetched,
+  };
 }
 
 async function fetchJobDetail(jobId) {
@@ -197,9 +225,11 @@ async function fetchJobDetail(jobId) {
 }
 
 module.exports = {
+  PAGE_SIZE,
   searchJobs,
   fetchJobDetail,
   parseSearchResults,
   parseJobDetail,
   recencyParam,
+  buildSearchUrl,
 };

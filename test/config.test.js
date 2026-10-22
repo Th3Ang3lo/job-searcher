@@ -27,15 +27,18 @@ test('parseArgs lê --resume e as demais opções', () => {
   assert.deepEqual(
     parseArgs([
       '--dry-run',
+      '--reset-pages',
       '--pages=2',
       '--limit=5',
       '--interests=perfil.md',
       '--system-prompt=prompt.md',
       '--csv=saida.csv',
+      '--state=progresso.json',
       '--resume=/tmp/curriculo.pdf',
     ]),
     {
       dryRun: true,
+      resetPages: true,
       keywordsOnly: false,
       help: false,
       pages: 2,
@@ -43,6 +46,7 @@ test('parseArgs lê --resume e as demais opções', () => {
       interests: 'perfil.md',
       systemPrompt: 'prompt.md',
       csv: 'saida.csv',
+      state: 'progresso.json',
       resume: '/tmp/curriculo.pdf',
     }
   );
@@ -55,6 +59,18 @@ test('parseArgs rejeita argumentos desconhecidos', () => {
 test('a ajuda menciona --resume e --system-prompt', () => {
   assert.match(HELP, /--resume=PATH/);
   assert.match(HELP, /--system-prompt=PATH/);
+  assert.match(HELP, /--reset-pages/);
+  assert.match(HELP, /--state=PATH/);
+});
+
+test('loadConfig configura o progresso das páginas', (t) => {
+  setEnv(t, { SEARCH_STATE_FILE: '' });
+
+  const config = loadConfig({});
+  assert.equal(config.searchStateFile, path.join(ROOT, '.job-searcher-state.json'));
+  assert.equal(config.resetPages, false);
+  assert.equal(loadConfig({ resetPages: true }).resetPages, true);
+  assert.equal(loadConfig({ state: '/tmp/progresso.json' }).searchStateFile, '/tmp/progresso.json');
 });
 
 test('loadConfig usa o prompt do sistema padrão ou o caminho informado', (t) => {

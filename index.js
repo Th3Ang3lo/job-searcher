@@ -15,6 +15,7 @@ const { analyzeJob } = require('./src/filter');
 const { evaluateJob, isLlmConfigured } = require('./src/llm');
 const { loadSystemPrompt } = require('./src/prompt');
 const { appendJobs, readExistingJobs } = require('./src/csv');
+const { getNextPage, loadState, saveState, setNextPage } = require('./src/state');
 const { loadResumeText } = require('./src/resume');
 const { canonicalJobUrl, formatSalary, sleep } = require('./src/util');
 
@@ -116,29 +117,67 @@ async function main() {
       effectiveMode === 'keywords' ? '' : ` (nota mínima ${config.threshold})`
     }`
   );
-  if (config.dryRun) console.log('Modo simulação: o CSV não será alterado.');
+  if (config.dryRun) {
+    console.log('Modo simulação: o CSV e o cursor de páginas não serão alterados.');
+  }
   console.log(`Prompt do sistema: ${config.systemPromptFile}`);
+  console.log(`Progresso das páginas: ${config.searchStateFile}`);
   console.log('');
+
+  const state = await loadState(config.searchStateFile, {
+    onWarning: (message) => console.warn(`AVISO: ${message}`),
+  });
+  if (config.resetPages) {
+    state.queries = {};
+    console.log('Cursor de páginas reiniciado; todas as buscas começam da página 1.');
+  }
 
   const found = new Map();
   let searchErrors = 0;
+  let stateSaveFailed = false;
 
   for (const role of interests.roles) {
-    console.log(`Buscando "${role}" em ${location}...`);
+    const query = { role, location, workModeCodes: modeCodes, daysBack: config.daysBack };
+    const startPage = getNextPage(state, query);
+    const fromPage = startPage > 0 ? ` (a partir da página ${startPage + 1})` : '';
+    console.log(`Buscando "${role}" em ${location}${fromPage}...`);
+
     try {
-      const jobs = await searchJobs({
+      const result = await searchJobs({
         role,
         location,
         workModeCodes: modeCodes,
         daysBack: config.daysBack,
         pages: config.pagesPerQuery,
+        startPage,
         maxJobs: config.maxJobsPerQuery,
         delayMs: config.delayMs,
       });
-      for (const job of jobs) {
+
+      for (const job of result.jobs) {
         if (!found.has(job.id)) found.set(job.id, job);
       }
-      console.log(`  ${jobs.length} vaga(s).`);
+      setNextPage(state, query, result.nextPage);
+
+      if (!config.dryRun) {
+        try {
+          await saveState(config.searchStateFile, state);
+        } catch (error) {
+          if (!stateSaveFailed) {
+            stateSaveFailed = true;
+            console.warn(
+              `! Não foi possível salvar o progresso em ${config.searchStateFile}: ${error.message}`
+            );
+          }
+        }
+      }
+
+      console.log(`  ${result.jobs.length} vaga(s).`);
+      if (result.reachedEnd) {
+        console.log('  Fim dos resultados; a próxima execução recomeça da página 1.');
+      } else {
+        console.log(`  Próxima execução continua na página ${result.nextPage + 1}.`);
+      }
     } catch (error) {
       searchErrors++;
       console.warn(`  Falha: ${error.message}`);

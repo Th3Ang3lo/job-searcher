@@ -1,6 +1,7 @@
 node_modules/
 .env
 vagas.csv
+.job-searcher-state.json
 *.log
 *.tmp
 .DS_Store

@@ -9,12 +9,14 @@ const HELP = `Uso: node index.js [opções]
 
 Opções:
   --dry-run          Avalia e mostra os resultados, sem escrever no CSV
+  --reset-pages      Recomeça da primeira página em todas as buscas
   --keywords-only    Usa apenas palavras-chave (ignora o LLM)
-  --pages=N          Páginas de resultados por cargo (10 vagas por página)
+  --pages=N          Páginas de resultados por cargo em cada execução
   --limit=N          Máximo de vagas avaliadas a fundo nesta execução
   --interests=PATH   Arquivo de interesses (padrão: interests.md)
   --system-prompt=PATH  Arquivo com o prompt do sistema (padrão: system-prompt.md)
   --csv=PATH         Arquivo CSV de saída (padrão: vagas.csv)
+  --state=PATH       Progresso das páginas (padrão: .job-searcher-state.json)
   --resume=PATH      Currículo em PDF ou diretório com PDFs (opcional)
   -h, --help         Mostra esta ajuda`;
 
@@ -29,6 +31,7 @@ function parsePositiveInt(value, flag) {
 function parseArgs(argv) {
   const options = {
     dryRun: false,
+    resetPages: false,
     keywordsOnly: false,
     help: false,
     pages: null,
@@ -36,11 +39,13 @@ function parseArgs(argv) {
     interests: null,
     systemPrompt: null,
     csv: null,
+    state: null,
     resume: null,
   };
 
   for (const argument of argv) {
     if (argument === '--dry-run') options.dryRun = true;
+    else if (argument === '--reset-pages') options.resetPages = true;
     else if (argument === '--keywords-only') options.keywordsOnly = true;
     else if (argument === '--help' || argument === '-h') options.help = true;
     else if (argument.startsWith('--pages=')) {
@@ -53,6 +58,8 @@ function parseArgs(argv) {
       options.systemPrompt = argument.slice('--system-prompt='.length);
     } else if (argument.startsWith('--csv=')) {
       options.csv = argument.slice('--csv='.length);
+    } else if (argument.startsWith('--state=')) {
+      options.state = argument.slice('--state='.length);
     } else if (argument.startsWith('--resume=')) {
       options.resume = argument.slice('--resume='.length);
     } else {
@@ -91,6 +98,11 @@ function loadConfig(options) {
       'system-prompt.md'
     ),
     csvFile: resolvePath(options.csv || process.env.OUTPUT_CSV, 'vagas.csv'),
+    searchStateFile: resolvePath(
+      options.state || process.env.SEARCH_STATE_FILE,
+      '.job-searcher-state.json'
+    ),
+    resetPages: Boolean(options.resetPages),
     resumePath: resumeValue ? resolvePath(resumeValue, '') : '',
     resumeMaxChars: Math.max(1000, integer(process.env.RESUME_MAX_CHARS, 8000)),
     pagesPerQuery: options.pages ?? Math.max(1, integer(process.env.PAGES_PER_QUERY, 1)),
