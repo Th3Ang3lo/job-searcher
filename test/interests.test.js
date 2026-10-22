@@ -135,6 +135,39 @@ test('ignora exemplos misturados com itens reais', () => {
   assert.deepEqual(interests.roles, ['Engenheiro de Plataforma']);
 });
 
+test('remove a ênfase Markdown dos valores preenchidos', () => {
+  const interests = parseInterests(`## Cargos desejados
+- *Desenvolvedor Backend Sênior*
+- **Engenheiro de Software**
+
+## Tecnologias e habilidades
+- *Node.js, TypeScript*
+
+## Localização e modalidade
+- País: *Brasil*
+- Cidades: *São Paulo, Rio de Janeiro*
+- Modalidade: *Remoto, Híbrido*
+
+## Faixa salarial
+- Mínimo: *15000*
+- Moeda: *BRL*
+- Período: *mês*
+
+## Sobre mim
+- *8 anos de experiência em backend.*
+`);
+
+  assert.deepEqual(interests.roles, ['Desenvolvedor Backend Sênior', 'Engenheiro de Software']);
+  assert.deepEqual(interests.skills, ['Node.js', 'TypeScript']);
+  assert.equal(interests.country, 'Brasil');
+  assert.deepEqual(interests.cities, ['São Paulo', 'Rio de Janeiro']);
+  assert.deepEqual(interests.workModes, ['Remoto', 'Híbrido']);
+  assert.deepEqual(interests.salary, { min: 15000, currency: 'BRL', period: 'month' });
+  assert.deepEqual(interests.about, ['8 anos de experiência em backend.']);
+  assert.equal(buildSearchLocation(interests), 'Brazil');
+  assert.deepEqual(workModeCodes(interests.workModes), [2, 3]);
+});
+
 test('localização usa o nome em inglês e a modalidade remota', () => {
   const interests = parseInterests(filled);
   assert.equal(buildSearchLocation(interests), 'Brazil');

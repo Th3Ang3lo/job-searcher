@@ -6,8 +6,12 @@
 
 ## Cargos desejados
 
-- *ex.: Desenvolvedor Backend Sênior*
-- *ex.: Engenheiro de Software*
+- *Desenvolvedor Backend Sênior*
+- *Engenheiro de Software*
+- *Software Engineer*
+- *Programador*
+- *Pessoa Programadora*
+- *Desenvolvedor de software*
 
 ## Senioridade
 

@@ -87,6 +87,10 @@ function stripMarkdownEmphasis(value) {
   return String(value).replace(/^[\s*_`~]+|[\s*_`~]+$/g, '');
 }
 
+function cleanValue(value) {
+  return stripMarkdownEmphasis(String(value).trim());
+}
+
 function isExample(value) {
   const text = stripMarkdownEmphasis(value);
   return /^ex\.?\s*:/i.test(text) || /^exemplo\b/i.test(text) || text === '...';
@@ -95,7 +99,7 @@ function isExample(value) {
 function splitList(value) {
   return String(value)
     .split(/[,;]/)
-    .map((item) => item.trim())
+    .map((item) => cleanValue(item))
     .filter(Boolean);
 }
 
@@ -121,11 +125,11 @@ function parseInterests(markdown) {
     if (section === 'location') {
       const pair = content.match(/^([^:]+):\s*(.+)$/);
       if (!pair) continue;
-      const key = normalizeText(pair[1]);
+      const key = normalizeText(cleanValue(pair[1]));
       const value = pair[2].trim();
       if (isExample(value)) continue;
 
-      if (key.startsWith('pais')) data.country = value;
+      if (key.startsWith('pais')) data.country = cleanValue(value);
       else if (key.startsWith('cidade')) data.cities = splitList(value);
       else if (key.startsWith('modalidade')) data.workModes = splitList(value);
       continue;
@@ -134,8 +138,8 @@ function parseInterests(markdown) {
     if (section === 'salary') {
       const pair = content.match(/^([^:]+):\s*(.+)$/);
       if (!pair) continue;
-      const key = normalizeText(pair[1]);
-      const value = pair[2].trim();
+      const key = normalizeText(cleanValue(pair[1]));
+      const value = cleanValue(pair[2]);
       if (isExample(value)) continue;
 
       if (key.startsWith('min')) {
@@ -150,7 +154,7 @@ function parseInterests(markdown) {
     }
 
     if (section === 'about' || section === 'notes') {
-      data[section].push(content);
+      data[section].push(cleanValue(content));
       continue;
     }
 

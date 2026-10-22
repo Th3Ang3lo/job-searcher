@@ -4,6 +4,7 @@ const { truncate } = require('./util');
 
 const SYSTEM_PROMPT = [
   'Você é um recrutador técnico sênior avaliando se uma vaga combina com o perfil de um candidato.',
+  'Use o perfil e o currículo fornecidos como fonte de verdade sobre o candidato.',
   'Seja rigoroso, objetivo e consistente. Não invente informações.',
   'Responda somente com o objeto JSON pedido, sem markdown e sem texto adicional.',
 ].join(' ');
@@ -15,14 +16,21 @@ function isLlmConfigured(llm) {
   return Boolean(llm.baseUrl && llm.model);
 }
 
-function buildUserPrompt(job, profile, threshold) {
+function buildUserPrompt(job, profile, threshold, resumeText = '') {
   const description = job.description
     ? truncate(job.description, 6000)
     : '(descrição não disponível)';
 
-  return [
+  const sections = [
     'PERFIL DO CANDIDATO:',
     profile || '(perfil não preenchido)',
+  ];
+
+  if (resumeText) {
+    sections.push('', 'CURRÍCULO DO CANDIDATO (texto extraído do PDF):', resumeText);
+  }
+
+  sections.push(
     '',
     'VAGA:',
     `Título: ${job.title || '(não informado)'}`,
@@ -38,8 +46,10 @@ function buildUserPrompt(job, profile, threshold) {
     `Considere "aderente" somente se a nota for maior ou igual a ${threshold}.`,
     'Não estime salário: use apenas um valor explícito na descrição. Se não houver, use null.',
     'Responda APENAS com JSON válido no formato:',
-    '{"aderente": true, "nota": 0, "motivo": "até 2 frases", "salario": "valor explícito ou null"}',
-  ].join('\n');
+    '{"aderente": true, "nota": 0, "motivo": "até 2 frases", "salario": "valor explícito ou null"}'
+  );
+
+  return sections.join('\n');
 }
 
 function parseJson(text) {
@@ -139,11 +149,11 @@ async function chatCompletion({ messages, llm, jsonMode = true, signal }) {
   return content;
 }
 
-async function evaluateJob({ job, profile, llm, signal }) {
+async function evaluateJob({ job, profile, resumeText = '', llm, signal }) {
   const threshold = Number.isFinite(llm.threshold) ? llm.threshold : 70;
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: buildUserPrompt(job, profile, threshold) },
+    { role: 'user', content: buildUserPrompt(job, profile, threshold, resumeText) },
   ];
 
   let content = await chatCompletion({ messages, llm, jsonMode: true, signal });

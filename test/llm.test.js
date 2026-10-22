@@ -64,6 +64,28 @@ test('prompt inclui nota mínima, perfil e descrição truncada', () => {
   assert.ok(prompt.length < 7000);
 });
 
+test('prompt inclui o currículo somente quando fornecido', () => {
+  const job = {
+    title: 'Dev',
+    company: 'Acme',
+    location: 'Remoto',
+    salary: '',
+    description: 'Node.js',
+  };
+
+  const withResume = buildUserPrompt(
+    job,
+    'Cargos desejados: Dev',
+    70,
+    'Curriculo Teste - Node.js TypeScript'
+  );
+  assert.match(withResume, /CURRÍCULO DO CANDIDATO/);
+  assert.match(withResume, /Curriculo Teste - Node\.js TypeScript/);
+
+  const withoutResume = buildUserPrompt(job, 'Cargos desejados: Dev', 70);
+  assert.doesNotMatch(withoutResume, /CURRÍCULO DO CANDIDATO/);
+});
+
 test('conversa com uma API compatível com OpenAI', async (t) => {
   let captured = null;
 
@@ -111,6 +133,7 @@ test('conversa com uma API compatível com OpenAI', async (t) => {
       description: 'Node.js',
     },
     profile: 'Cargos desejados: Dev',
+    resumeText: 'Curriculo Teste - Node.js TypeScript',
     llm: {
       apiKey: 'sk-test',
       baseUrl: `http://127.0.0.1:${port}/v1`,
@@ -123,6 +146,8 @@ test('conversa com uma API compatível com OpenAI', async (t) => {
   assert.equal(captured.authorization, 'Bearer sk-test');
   assert.equal(captured.body.model, 'test-model');
   assert.equal(captured.body.response_format.type, 'json_object');
+  assert.match(captured.body.messages[1].content, /CURRÍCULO DO CANDIDATO/);
+  assert.match(captured.body.messages[1].content, /Curriculo Teste - Node\.js TypeScript/);
   assert.equal(verdict.aderente, true);
   assert.equal(verdict.nota, 88);
   assert.equal(verdict.salario, 'R$ 12.000/mês');

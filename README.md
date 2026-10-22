@@ -13,11 +13,12 @@ funciona apenas com as palavras-chave.
 
 ## Requisitos
 
-- Node.js 20 ou superior (não há dependências externas).
+- Node.js 22 ou superior. A extração de texto de PDF usa o pacote `unpdf`.
 
 ## Instalação
 
 ```bash
+npm install
 cp .env.example .env
 ```
 
@@ -27,7 +28,9 @@ deixe a chave em branco e rode com `--keywords-only` ou defina `FILTER_MODE="key
 ## Preencher o interests.md
 
 Cada seção é uma lista com um item por linha. Linhas de exemplo começando com `ex.:`
-(em itálico) são ignoradas até você substituí-las. Seções vazias não entram no filtro.
+(em itálico) são ignoradas até você substituí-las. Você pode manter o itálico ao
+preencher os valores reais; o parser remove a formatação. Seções vazias não entram no
+filtro.
 
 - `## Cargos desejados` — vira as buscas no LinkedIn. É obrigatório ter ao menos um.
 - `## Tecnologias e habilidades`, `## Senioridade`, `## Idiomas das vagas` — sinais de aderência.
@@ -40,6 +43,23 @@ Cada seção é uma lista com um item por linha. Linhas de exemplo começando co
 - `## Palavras-chave que excluem a vaga` — ex.: `estágio`, `vendas`.
 - `## Empresas de interesse` / `## Empresas a evitar`.
 - `## Sobre mim` e `## Observações` — contexto livre enviado ao LLM.
+
+## Currículo em PDF (opcional)
+
+Aponte `RESUME_PATH` para um arquivo PDF ou para um diretório com um ou mais PDFs:
+
+```bash
+RESUME_PATH="/caminho/para/curriculos"
+```
+
+O texto extraído é enviado ao LLM junto com o `interests.md`, melhorando a avaliação de
+aderência. Se houver vários PDFs no diretório, eles são concatenados em ordem alfabética
+e o total é limitado por `RESUME_MAX_CHARS` (padrão 8000 caracteres). O mesmo caminho
+pode ser passado pela linha de comando com `--resume=PATH`.
+
+No modo `keywords` o currículo não é usado, porque não há LLM. PDFs escaneados (somente
+imagem) não têm texto extraível e geram um aviso; nesse caso o sistema segue sem o
+currículo.
 
 ## Uso
 
@@ -58,19 +78,22 @@ npm start -- --keywords-only     # ignora o LLM nesta execução
 npm start -- --pages=2           # duas páginas de resultados por cargo
 npm start -- --limit=15          # avalia no máximo 15 vagas a fundo
 npm start -- --interests=outro.md --csv=resultados.csv
+npm start -- --resume=/caminho/do/curriculo.pdf
 npm start -- --help
 ```
 
 ## Como funciona
 
-1. Lê o `interests.md` e monta uma busca por cargo no endpoint público de vagas do LinkedIn.
-2. Aplica os filtros de modalidade e período (`SEARCH_DAYS_BACK`).
-3. Remove vagas que já estão no CSV.
-4. Abre cada vaga nova para obter descrição e faixa salarial.
-5. Descarta empresas/palavras-chave excluídas e vagas abaixo do salário mínimo.
-6. No modo híbrido, exige algum sinal positivo (cargo, skills, keywords ou empresa) e
-   então pede ao LLM uma nota de 0 a 100 com justificativa.
-7. Grava as aprovadas no CSV, extraindo o salário da página (ou do texto da vaga via LLM).
+1. Lê o `interests.md` e, se `RESUME_PATH` estiver configurado, extrai o texto dos PDFs.
+2. Monta uma busca por cargo no endpoint público de vagas do LinkedIn.
+3. Aplica os filtros de modalidade e período (`SEARCH_DAYS_BACK`).
+4. Remove vagas que já estão no CSV.
+5. Abre cada vaga nova para obter descrição e faixa salarial.
+6. Descarta empresas/palavras-chave excluídas e vagas abaixo do salário mínimo.
+7. No modo híbrido, exige algum sinal positivo (cargo, skills, keywords ou empresa) e
+   então pede ao LLM uma nota de 0 a 100 com justificativa, considerando o perfil e o
+   currículo.
+8. Grava as aprovadas no CSV, extraindo o salário da página (ou do texto da vaga via LLM).
    Quando não há valor explícito, grava `Não informado`.
 
 ## Configuração (.env)
@@ -80,6 +103,8 @@ npm start -- --help
 | `LLM_API_KEY` | — | Chave da API no formato OpenAI. |
 | `LLM_BASE_URL` | `https://api.deepseek.com/v1` | Endpoint compatível com `/chat/completions`. |
 | `LLM_MODEL` | `deepseek-v4-flash` | Modelo usado no filtro. |
+| `RESUME_PATH` | — | Arquivo PDF ou diretório com currículos (opcional). |
+| `RESUME_MAX_CHARS` | `8000` | Limite de caracteres do currículo no prompt. |
 | `FILTER_MODE` | `hybrid` | `hybrid`, `keywords` ou `llm`. |
 | `MATCH_THRESHOLD` | `70` | Nota mínima para aceitar a vaga. |
 | `SEARCH_DAYS_BACK` | `7` | Janela de recência da busca. |
@@ -107,8 +132,9 @@ Exemplo de cron diário às 9h:
   os parsers em [src/linkedin.js](src/linkedin.js) precisam de ajuste.
 - Salários só aparecem quando a empresa os publica; muitas vagas ficarão como
   `Não informado`.
-- O filtro por LLM envia título, empresa, local, salário e descrição para o provedor
-  configurado. Não envie dados sensíveis no `interests.md`.
+- O filtro por LLM envia título, empresa, local, salário, descrição e o texto do
+  currículo para o provedor configurado. Não use o recurso se não quiser compartilhar
+  esses dados; não coloque informações sensíveis no `interests.md`.
 
 ## Testes
 
@@ -117,4 +143,5 @@ npm test
 ```
 
 Os testes cobrem o parser do `interests.md`, os parsers de HTML do LinkedIn, o filtro
-por regras e a leitura/escrita/deduplicação do CSV. Nenhum teste acessa a rede.
+por regras, a extração de currículo em PDF e a leitura/escrita/deduplicação do CSV.
+Nenhum teste acessa a rede.

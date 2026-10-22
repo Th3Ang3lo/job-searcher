@@ -14,6 +14,7 @@ Opções:
   --limit=N          Máximo de vagas avaliadas a fundo nesta execução
   --interests=PATH   Arquivo de interesses (padrão: interests.md)
   --csv=PATH         Arquivo CSV de saída (padrão: vagas.csv)
+  --resume=PATH      Currículo em PDF ou diretório com PDFs (opcional)
   -h, --help         Mostra esta ajuda`;
 
 function parsePositiveInt(value, flag) {
@@ -33,6 +34,7 @@ function parseArgs(argv) {
     limit: null,
     interests: null,
     csv: null,
+    resume: null,
   };
 
   for (const argument of argv) {
@@ -47,6 +49,8 @@ function parseArgs(argv) {
       options.interests = argument.slice('--interests='.length);
     } else if (argument.startsWith('--csv=')) {
       options.csv = argument.slice('--csv='.length);
+    } else if (argument.startsWith('--resume=')) {
+      options.resume = argument.slice('--resume='.length);
     } else {
       throw new Error(`Argumento desconhecido: ${argument}. Use --help.`);
     }
@@ -72,11 +76,15 @@ function loadConfig(options) {
     .trim()
     .toLowerCase();
   const envLimit = integer(process.env.MAX_JOBS_TOTAL, 0);
+  const resumeValue =
+    options.resume || process.env.RESUME_PATH || process.env.RESUME_DIR || '';
 
   return {
     root: ROOT,
     interestsFile: resolvePath(options.interests || process.env.INTERESTS_FILE, 'interests.md'),
     csvFile: resolvePath(options.csv || process.env.OUTPUT_CSV, 'vagas.csv'),
+    resumePath: resumeValue ? resolvePath(resumeValue, '') : '',
+    resumeMaxChars: Math.max(1000, integer(process.env.RESUME_MAX_CHARS, 8000)),
     pagesPerQuery: options.pages ?? Math.max(1, integer(process.env.PAGES_PER_QUERY, 1)),
     maxJobsPerQuery: Math.max(0, integer(process.env.MAX_JOBS_PER_QUERY, 0)),
     totalLimit:

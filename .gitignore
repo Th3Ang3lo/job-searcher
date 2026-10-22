@@ -5,3 +5,10 @@ vagas.csv
 *.tmp
 .DS_Store
 interests.md
+
+# Currículos (dados pessoais)
+curriculo/
+curriculum/
+resume/
+resumes/
+*.pdf

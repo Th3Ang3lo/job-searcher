@@ -14,6 +14,7 @@ const { fetchJobDetail, searchJobs } = require('./src/linkedin');
 const { analyzeJob } = require('./src/filter');
 const { evaluateJob, isLlmConfigured } = require('./src/llm');
 const { appendJobs, readExistingJobs } = require('./src/csv');
+const { loadResumeText } = require('./src/resume');
 const { canonicalJobUrl, formatSalary, sleep } = require('./src/util');
 
 function describe(job) {
@@ -66,6 +67,40 @@ async function main() {
   if (effectiveMode === 'hybrid' && !llmReady) {
     console.warn('AVISO: LLM_API_KEY não configurada; usando filtro por palavras-chave nesta execução.');
     effectiveMode = 'keywords';
+  }
+
+  let resumeText = '';
+  if (config.resumePath) {
+    if (effectiveMode === 'keywords') {
+      console.warn(
+        'AVISO: currículo configurado, mas o modo keywords não usa LLM; o PDF será ignorado.'
+      );
+    } else {
+      console.log(`Lendo currículo em ${config.resumePath}...`);
+      try {
+        const resume = await loadResumeText(config.resumePath, {
+          maxChars: config.resumeMaxChars,
+          onWarning: (message) => console.warn(`  ${message}`),
+        });
+        resumeText = resume.text;
+
+        if (resumeText) {
+          console.log(
+            `Currículo: ${resume.files.length} PDF(s), ${resumeText.length} caracteres` +
+              `${resume.truncated ? ' (truncado)' : ''}.`
+          );
+        } else {
+          console.warn(
+            `AVISO: nenhum texto de PDF encontrado em ${config.resumePath}; ` +
+              'seguindo sem currículo.'
+          );
+        }
+      } catch (error) {
+        throw new Error(
+          `Não foi possível ler o currículo em ${config.resumePath}: ${error.message}`
+        );
+      }
+    }
   }
 
   console.log('Busca de vagas — LinkedIn');
@@ -187,6 +222,7 @@ async function main() {
         verdict = await evaluateJob({
           job,
           profile,
+          resumeText,
           llm: { ...config.llm, threshold: config.threshold },
         });
         llmFailures = 0;
