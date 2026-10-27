@@ -13,6 +13,7 @@ const {
   decodeEntities,
   containsTerm,
   formatSalary,
+  isRateLimitError,
 } = require('../src/util');
 
 test('converte valores monetários em formato brasileiro e americano', () => {
@@ -68,4 +69,13 @@ test('formatSalary usa o fallback', () => {
   assert.equal(formatSalary('  R$ 10.000  '), 'R$ 10.000');
   assert.equal(formatSalary(''), 'Não informado');
   assert.equal(formatSalary(null), 'Não informado');
+});
+
+test('identifica erros de limite de requisições', () => {
+  assert.equal(isRateLimitError(Object.assign(new Error('x'), { status: 429 })), true);
+  assert.equal(isRateLimitError(Object.assign(new Error('x'), { status: 999 })), true);
+  assert.equal(isRateLimitError({ rateLimited: true }), true);
+  assert.equal(isRateLimitError(Object.assign(new Error('x'), { status: 500 })), false);
+  assert.equal(isRateLimitError(new Error('x')), false);
+  assert.equal(isRateLimitError(null), false);
 });

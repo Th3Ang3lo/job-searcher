@@ -152,6 +152,38 @@ test('evaluateJob exige o prompt do sistema', async () => {
   );
 });
 
+test('propaga o status HTTP dos erros do LLM', async (t) => {
+  const server = http.createServer((request, response) => {
+    request.resume();
+    response.writeHead(429, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ error: 'rate limit' }));
+  });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const { port } = server.address();
+  await assert.rejects(
+    () =>
+      evaluateJob({
+        job: { title: 'Dev', company: 'Acme', description: 'Node.js' },
+        profile: 'Cargos desejados: Dev',
+        systemPrompt: 'Você é um recrutador de teste.',
+        llm: {
+          apiKey: 'sk-test',
+          baseUrl: `http://127.0.0.1:${port}/v1`,
+          model: 'test-model',
+          threshold: 70,
+        },
+      }),
+    (error) => {
+      assert.equal(error.status, 429);
+      assert.equal(error.rateLimited, true);
+      return true;
+    }
+  );
+});
+
 test('conversa com uma API compatível com OpenAI', async (t) => {
   let captured = null;
 

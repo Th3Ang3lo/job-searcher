@@ -100,6 +100,7 @@ npm start -- --keywords-only     # ignora o LLM nesta execução
 npm start -- --pages=2           # duas páginas novas por cargo nesta execução
 npm start -- --reset-pages       # volta todas as buscas para a página 1
 npm start -- --limit=15          # avalia no máximo 15 vagas a fundo
+npm start -- --role="Engenheiro de Software"  # busca apenas este cargo
 npm start -- --interests=outro.md --csv=resultados.csv
 npm start -- --system-prompt=meu-prompt.md
 npm start -- --state=progresso.json
@@ -121,6 +122,25 @@ e assim por diante — sem repetir as mesmas vagas a cada rodada.
 - `--reset-pages` (ou apagar `.job-searcher-state.json`) recomeça tudo da página 1.
 - `--dry-run` não altera o cursor, então simulações repetidas mostram as mesmas páginas.
 - O progresso é local e não é versionado no git.
+
+## Busca termo por termo
+
+Os cargos de [interests.md](interests.md) não são buscados em paralelo. Cada termo é
+processado completamente antes do próximo: busca das páginas, avaliação das vagas
+encontradas, gravação das aceitas no CSV e só então a próxima busca. Entre um termo e
+outro o sistema espera `ROLE_DELAY_MS` (padrão: 30 segundos), espaçando as requisições
+ao LinkedIn.
+
+Para rodar apenas um termo por execução — útil quando o LinkedIn está limitando as
+requisições —, use `--role`:
+
+```bash
+npm start -- --role="Desenvolvedor Backend Sênior" --pages=1 --limit=10
+npm start -- --role="Engenheiro de Software" --pages=1 --limit=10
+```
+
+O valor pode ser o nome exato ou um trecho que identifique um único cargo. Se o trecho
+casar com mais de um cargo, o sistema informa quais são e pede o nome completo.
 
 ## Tecnologias pedidas e backfill
 
@@ -146,8 +166,30 @@ npm run backfill-tech                          # preenche todas as linhas penden
 ```
 
 O backfill ignora linhas que já têm tecnologias e vagas sem link válido. Se o LinkedIn
-limitar as requisições, ele para após cinco falhas seguidas; o que já foi atualizado
-fica salvo. Use `--delay=MS` para aumentar o intervalo e `--csv=PATH` para outro arquivo.
+limitar as requisições (HTTP 429/999), ele para imediatamente; outras falhas seguidas
+param após cinco tentativas. O que já foi atualizado fica salvo. Use `--delay=MS` para
+aumentar o intervalo e `--csv=PATH` para outro arquivo.
+
+## Limite de requisições (HTTP 429/999)
+
+O LinkedIn pode responder `429` ou `999` quando recebe muitas requisições. O sistema já
+tenta novamente respeitando o cabeçalho `Retry-After` (quando presente) e com espera
+crescente; se o limite persistir, a execução é interrompida em vez de continuar
+insistindo. As vagas já aceitas continuam salvas no CSV e o progresso do backfill já
+gravado é preservado. O mesmo vale para um `429` do provedor do LLM.
+
+Se isso acontecer, aguarde alguns minutos (o bloqueio pode durar horas) e reduza o
+volume. A busca já processa um termo por vez; para limitar ainda mais, rode um termo por
+execução:
+
+```bash
+npm start -- --role="Desenvolvedor Backend Sênior" --pages=1 --limit=10
+npm run backfill-tech -- --limit=20 --delay=10000
+```
+
+Também vale aumentar `REQUEST_DELAY_MS` e `ROLE_DELAY_MS` no `.env` (por exemplo,
+`15000`/`60000`) e manter `PAGES_PER_QUERY=1`. Evite rodar busca e backfill ao mesmo
+tempo.
 
 ## Como funciona
 
@@ -169,6 +211,9 @@ fica salvo. Use `--delay=MS` para aumentar o intervalo e `--csv=PATH` para outro
    filtro e recebe os itens extras que o LLM devolver. Quando não há valor explícito,
    grava `Não informado`.
 
+Os passos 2 a 8 são repetidos para cada cargo, um termo por vez, com uma pausa entre
+eles.
+
 ## Configuração (.env)
 
 | Variável | Padrão | Descrição |
@@ -186,6 +231,7 @@ fica salvo. Use `--delay=MS` para aumentar o intervalo e `--csv=PATH` para outro
 | `MAX_JOBS_PER_QUERY` | `0` | Limite de vagas por cargo; `0` = todas as páginas configuradas. |
 | `MAX_JOBS_TOTAL` | `0` | Limite de vagas avaliadas a fundo; `0` = sem limite. |
 | `REQUEST_DELAY_MS` | `1500` | Intervalo entre requisições ao LinkedIn. |
+| `ROLE_DELAY_MS` | `30000` | Pausa entre um termo de busca e o próximo. |
 | `INTERESTS_FILE` | `interests.md` | Arquivo de perfil. |
 | `OUTPUT_CSV` | `vagas.csv` | Arquivo de saída. |
 | `SEARCH_STATE_FILE` | `.job-searcher-state.json` | Progresso da paginação entre execuções. |
@@ -202,7 +248,9 @@ Exemplo de cron diário às 9h:
 
 - O sistema usa o endpoint **público** de vagas do LinkedIn, sem login. O LinkedIn não
   oferece uma API pública oficial para isso e pode bloquear/limitar requisições
-  (HTTP 429/999). Use com moderação, para uso pessoal, e ciente dos Termos de Uso.
+  (HTTP 429/999). O sistema tenta novamente e, se o limite persistir, interrompe a
+  execução; veja a seção acima. Use com moderação, para uso pessoal, e ciente dos
+  Termos de Uso.
 - A estrutura HTML do LinkedIn pode mudar. Se os resultados começarem a vir vazios,
   os parsers em [src/linkedin.js](src/linkedin.js) precisam de ajuste.
 - Salários só aparecem quando a empresa os publica; muitas vagas ficarão como

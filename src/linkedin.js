@@ -25,6 +25,29 @@ function requestHeaders() {
   };
 }
 
+function retryAfterMs(response) {
+  const header = response.headers.get('retry-after');
+  if (!header) return 0;
+
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+  const date = Date.parse(header);
+  return Number.isFinite(date) ? Math.max(0, date - Date.now()) : 0;
+}
+
+function retryDelayMs(response, attempt) {
+  const retryAfter = retryAfterMs(response);
+  if (retryAfter > 0) return Math.min(retryAfter, 120000);
+
+  if (response.status === 429 || response.status === 999) {
+    const backoff = 5000 * 2 ** (attempt - 1);
+    return Math.min(backoff, 60000) + Math.floor(Math.random() * 1000);
+  }
+
+  return 2000 * attempt;
+}
+
 async function fetchHtml(url, { attempts = 3, timeoutMs = 30000, label = 'requisição' } = {}) {
   let lastError = null;
 
@@ -49,13 +72,14 @@ async function fetchHtml(url, { attempts = 3, timeoutMs = 30000, label = 'requis
 
     const error = new Error(`LinkedIn respondeu HTTP ${response.status} em ${label}`);
     error.status = response.status;
+    error.rateLimited = response.status === 429 || response.status === 999;
     lastError = error;
 
-    const retryable = response.status === 429 || response.status === 999 || response.status >= 500;
+    const retryable = error.rateLimited || response.status >= 500;
     if (!retryable || attempt === attempts) break;
 
-    const wait = 2000 * attempt;
-    console.warn(`  HTTP ${response.status} em ${label}; tentando de novo em ${wait / 1000}s...`);
+    const wait = retryDelayMs(response, attempt);
+    console.warn(`  HTTP ${response.status} em ${label}; tentando de novo em ${Math.ceil(wait / 1000)}s...`);
     await sleep(wait);
   }
 

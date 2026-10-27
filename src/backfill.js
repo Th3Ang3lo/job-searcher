@@ -1,6 +1,6 @@
 'use strict';
 
-const { extractJobId, normalizeText, sleep } = require('./util');
+const { extractJobId, isRateLimitError, normalizeText, sleep } = require('./util');
 const { extractTechnologies } = require('./technologies');
 
 const PLACEHOLDER = 'Não informado';
@@ -63,6 +63,7 @@ async function backfillTechnologies(
   let failed = 0;
   let consecutiveFailures = 0;
   let stopped = false;
+  let rateLimited = false;
 
   for (const row of targets) {
     if (processed >= limit) break;
@@ -80,13 +81,18 @@ async function backfillTechnologies(
       error = caught;
       failed++;
       consecutiveFailures++;
+      if (isRateLimitError(caught)) {
+        rateLimited = true;
+        stopped = true;
+      }
     }
 
     const title = row[1] || (detail && detail.title) || '';
     const description = detail && detail.description ? detail.description : '';
     const technologies = extractTechnologies(`${title}\n${description}`);
 
-    if (technologies.length) {
+    // Em um 429 a descrição não foi lida; não grave tecnologias parciais do título.
+    if (technologies.length && !rateLimited) {
       row[3] = technologies.join(', ');
       updated++;
       if (onWrite) await onWrite(rows);
@@ -103,6 +109,7 @@ async function backfillTechnologies(
       });
     }
 
+    if (rateLimited) break;
     if (consecutiveFailures >= maxConsecutiveFailures) {
       stopped = true;
       break;
@@ -122,6 +129,7 @@ async function backfillTechnologies(
     failed,
     skipped,
     stopped,
+    rateLimited,
   };
 }
 

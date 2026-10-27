@@ -113,6 +113,39 @@ test('para após várias falhas seguidas', async () => {
   assert.equal(result.total, 8);
 });
 
+test('para imediatamente quando o LinkedIn limita as requisições', async () => {
+  const rows = Array.from({ length: 6 }, (_, index) => [
+    'Empresa',
+    'Dev Java',
+    'x',
+    'Não informado',
+    `https://www.linkedin.com/jobs/view/${6000000 + index}`,
+  ]);
+
+  const rateError = new Error('LinkedIn respondeu HTTP 429');
+  rateError.status = 429;
+
+  let calls = 0;
+  const result = await backfillTechnologies(rows, {
+    fetchDetail: async () => {
+      calls++;
+      throw rateError;
+    },
+    delayMs: 0,
+    sleepFn: async () => {},
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(result.processed, 1);
+  assert.equal(result.stopped, true);
+  assert.equal(result.rateLimited, true);
+  assert.equal(result.failed, 1);
+  assert.equal(result.updated, 0);
+  // Não grava tecnologias parciais extraídas só do título.
+  assert.equal(rows[0][3], 'Não informado');
+  assert.equal(rows[1][3], 'Não informado');
+});
+
 test('exige uma função de busca da descrição', async () => {
   await assert.rejects(() => backfillTechnologies(makeRows(), {}), /fetchDetail/);
 });

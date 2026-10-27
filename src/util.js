@@ -222,6 +222,12 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isRateLimitError(error) {
+  return Boolean(
+    error && (error.status === 429 || error.status === 999 || error.rateLimited === true)
+  );
+}
+
 module.exports = {
   decodeEntities,
   htmlToText,
@@ -239,4 +245,5 @@ module.exports = {
   canonicalJobUrl,
   formatSalary,
   sleep,
+  isRateLimitError,
 };

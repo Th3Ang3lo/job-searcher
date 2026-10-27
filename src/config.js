@@ -13,6 +13,7 @@ Opções:
   --keywords-only    Usa apenas palavras-chave (ignora o LLM)
   --pages=N          Páginas de resultados por cargo em cada execução
   --limit=N          Máximo de vagas avaliadas a fundo nesta execução
+  --role=TERMO       Busca apenas este cargo nesta execução (use aspas se tiver espaços)
   --interests=PATH   Arquivo de interesses (padrão: interests.md)
   --system-prompt=PATH  Arquivo com o prompt do sistema (padrão: system-prompt.md)
   --csv=PATH         Arquivo CSV de saída (padrão: vagas.csv)
@@ -36,6 +37,7 @@ function parseArgs(argv) {
     help: false,
     pages: null,
     limit: null,
+    role: null,
     interests: null,
     systemPrompt: null,
     csv: null,
@@ -52,6 +54,10 @@ function parseArgs(argv) {
       options.pages = parsePositiveInt(argument.slice('--pages='.length), '--pages');
     } else if (argument.startsWith('--limit=')) {
       options.limit = parsePositiveInt(argument.slice('--limit='.length), '--limit');
+    } else if (argument.startsWith('--role=')) {
+      const role = argument.slice('--role='.length).trim();
+      if (!role) throw new Error('--role precisa de um cargo.');
+      options.role = role;
     } else if (argument.startsWith('--interests=')) {
       options.interests = argument.slice('--interests='.length);
     } else if (argument.startsWith('--system-prompt=')) {
@@ -115,6 +121,7 @@ function loadConfig(options) {
           : Number.POSITIVE_INFINITY,
     daysBack: Math.max(1, integer(process.env.SEARCH_DAYS_BACK, 7)),
     delayMs: Math.max(500, integer(process.env.REQUEST_DELAY_MS, 1500)),
+    roleDelayMs: Math.max(1000, integer(process.env.ROLE_DELAY_MS, 30000)),
     threshold: Math.min(100, Math.max(0, integer(process.env.MATCH_THRESHOLD, 70))),
     filterMode: ['hybrid', 'keywords', 'llm'].includes(mode) ? mode : 'hybrid',
     dryRun: options.dryRun,

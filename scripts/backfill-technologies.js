@@ -5,6 +5,7 @@ const { loadConfig } = require('../src/config');
 const { HEADER, readExistingJobs, writeCsv } = require('../src/csv');
 const { backfillTechnologies } = require('../src/backfill');
 const { fetchJobDetail } = require('../src/linkedin');
+const { isRateLimitError } = require('../src/util');
 
 const HELP = `Uso: node scripts/backfill-technologies.js [opções]
 
@@ -125,7 +126,13 @@ async function main() {
       `${result.fetched} vaga(s) aberta(s), ${result.failed} falha(s), ` +
       `${result.skipped} linha(s) sem link ou já preenchida(s).`
   );
-  if (result.stopped) {
+  if (result.rateLimited) {
+    console.warn(
+      'Interrompido: o LinkedIn limitou as requisições (HTTP 429/999). Aguarde alguns minutos ' +
+        'e rode de novo; o que já foi atualizado está salvo.'
+    );
+    process.exitCode = 1;
+  } else if (result.stopped) {
     console.warn(
       'Parado após várias falhas seguidas. O LinkedIn pode estar limitando as requisições; ' +
         'tente novamente mais tarde (o que já foi atualizado está salvo).'
@@ -139,8 +146,10 @@ async function main() {
 if (require.main === module) {
   main().catch((error) => {
     console.error(`Erro: ${error.message}`);
-    if (error.status === 429 || error.status === 999) {
-      console.error('Dica: o LinkedIn está limitando as requisições. Aguarde alguns minutos.');
+    if (isRateLimitError(error)) {
+      console.error(
+        'Dica: o LinkedIn está limitando as requisições. Aguarde alguns minutos e rode de novo.'
+      );
     }
     if (process.env.DEBUG) console.error(error.stack);
     process.exitCode = 1;

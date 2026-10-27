@@ -30,6 +30,7 @@ test('parseArgs lê --resume e as demais opções', () => {
       '--reset-pages',
       '--pages=2',
       '--limit=5',
+      '--role=Engenheiro de Software',
       '--interests=perfil.md',
       '--system-prompt=prompt.md',
       '--csv=saida.csv',
@@ -43,6 +44,7 @@ test('parseArgs lê --resume e as demais opções', () => {
       help: false,
       pages: 2,
       limit: 5,
+      role: 'Engenheiro de Software',
       interests: 'perfil.md',
       systemPrompt: 'prompt.md',
       csv: 'saida.csv',
@@ -54,13 +56,23 @@ test('parseArgs lê --resume e as demais opções', () => {
 
 test('parseArgs rejeita argumentos desconhecidos', () => {
   assert.throws(() => parseArgs(['--foo']), /Argumento desconhecido/);
+  assert.throws(() => parseArgs(['--role=']), /--role precisa de um cargo/);
 });
 
 test('a ajuda menciona --resume e --system-prompt', () => {
   assert.match(HELP, /--resume=PATH/);
   assert.match(HELP, /--system-prompt=PATH/);
+  assert.match(HELP, /--role=TERMO/);
   assert.match(HELP, /--reset-pages/);
   assert.match(HELP, /--state=PATH/);
+});
+
+test('ROLE_DELAY_MS configura a pausa entre termos', (t) => {
+  setEnv(t, { ROLE_DELAY_MS: '250' });
+  assert.equal(loadConfig({}).roleDelayMs, 1000);
+
+  process.env.ROLE_DELAY_MS = '45000';
+  assert.equal(loadConfig({}).roleDelayMs, 45000);
 });
 
 test('loadConfig configura o progresso das páginas', (t) => {

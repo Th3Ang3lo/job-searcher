@@ -186,7 +186,10 @@ async function chatCompletion({ messages, llm, jsonMode = true, signal }) {
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`LLM respondeu HTTP ${response.status}: ${truncate(detail, 300)}`);
+    const error = new Error(`LLM respondeu HTTP ${response.status}: ${truncate(detail, 300)}`);
+    error.status = response.status;
+    error.rateLimited = response.status === 429;
+    throw error;
   }
 
   const data = await response.json();
